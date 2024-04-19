@@ -27,6 +27,7 @@ from torch import distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 import cv2
 
+
 # from semseg.utils.utils import fix_seeds, setup_cudnn, cleanup_ddp, setup_ddp, get_logger, cal_flops, print_iou
 
 
@@ -175,7 +176,7 @@ def evaluate(model, dataloader, config, device, engine, save_dir=None):
 
 @torch.no_grad()
 def evaluate_msf(
-    model, dataloader, config, device, scales, flip, engine, save_dir=None
+        model, dataloader, config, device, scales, flip, engine, save_dir=None
 ):
     model.eval()
 
@@ -294,6 +295,44 @@ def evaluate_msf(
     else:
         all_metrics = metrics
     return all_metrics
+
+
+@torch.no_grad()
+def evaluate_parta(
+        model, dataloader, config, device, scales, flip, engine, save_dir=None
+):
+    model.eval()
+    criterion = torch.nn.MSELoss(reduction="mean", )
+    gt_std = dataloader.dataset.gt_std.cuda(non_blocking=True)
+    gt_mean = dataloader.dataset.gt_mean.cuda(non_blocking=True)
+
+    val_loss = 0
+    error = 0
+    for minibatch in tqdm(dataloader):
+        images = minibatch["data"]
+        labels = minibatch["label"]
+        modal_xs = minibatch["modal_x"]
+
+        images = images.cuda(non_blocking=True)
+        labels = labels.cuda(non_blocking=True)
+        modal_xs = modal_xs.cuda(non_blocking=True)
+
+
+        out = model(images, modal_xs)
+        out_denorm = out * gt_std + gt_mean
+        loss = torch.sqrt(criterion(out_denorm, labels))
+        val_loss += loss.item()
+
+        # rmrse calculation
+        pred = out_denorm.cpu().numpy()
+        gt = labels.cpu().numpy()
+        sre = np.square((pred - gt) / (gt + 1))
+        rsre = np.sqrt(np.mean(sre, axis=0))
+        error += np.mean(rsre)
+
+    val_loss /= len(dataloader)
+    error /= len(dataloader)
+    return val_loss, error
 
 
 def main(cfg):

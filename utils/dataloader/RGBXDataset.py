@@ -1,6 +1,7 @@
 import os
 from pickletools import uint8
 import cv2
+import json
 import torch
 import numpy as np
 
@@ -26,6 +27,14 @@ class RGBXDataset(data.Dataset):
         self._file_length = file_length
         self.preprocess = preprocess
 
+        # read json file
+        with open(self._gt_path) as json_file:
+            self.gt_label_file = json.load(json_file)
+
+        gt_values = torch.tensor([[v for k, v in traits.items() if not np.isnan(v)] for name, traits in self.gt_label_file.items()])
+        self.gt_mean = torch.mean(gt_values, dim=0)
+        self.gt_std = torch.std(gt_values, dim=0)
+
     def __len__(self):
         if self._file_length is not None:
             return self._file_length
@@ -37,34 +46,37 @@ class RGBXDataset(data.Dataset):
         else:
             item_name = self._file_names[index]
 
-        item_name=item_name.split('/')[1].split(self._rgb_format)[0]
-      
+        # item_name=item_name.split('/')[1].split(self._rgb_format)[0]
+        gt = self.gt_label_file[item_name]
+        gt = np.array([v for k, v in gt.items()])
+
         rgb_path = os.path.join(self._rgb_path, item_name.replace('.jpg','').replace('.png','') + self._rgb_format)
         x_path = os.path.join(self._x_path, item_name.replace('.jpg','').replace('.png','')  + self._x_format)
-        gt_path = os.path.join(self._gt_path, item_name.replace('.jpg','').replace('.png','')  + self._gt_format)
+        # gt_path = os.path.join(self._gt_path, item_name.replace('.jpg','').replace('.png','')  + self._gt_format)
 
         rgb = self._open_image(rgb_path, cv2.COLOR_BGR2RGB)
-
-        gt = self._open_image(gt_path, cv2.IMREAD_GRAYSCALE, dtype=np.uint8)
-        if self._transform_gt:
-            gt = self._gt_transform(gt) 
+        # rgb = self._resize_image(rgb)
+        # gt = self._open_image(gt_path, cv2.IMREAD_GRAYSCALE, dtype=np.uint8)
+        # if self._transform_gt:
+        #     gt = self._gt_transform(gt)
 
         if self._x_single_channel:
             x = self._open_image(x_path, cv2.IMREAD_GRAYSCALE)
             x = cv2.merge([x, x, x])
         else:
-            x =  self._open_image(x_path, cv2.COLOR_BGR2RGB)
+            x = self._open_image(x_path, cv2.COLOR_BGR2RGB)
         
         if self.preprocess is not None:
-            rgb, gt, x = self.preprocess(rgb, gt, x)
+            rgb, x = self.preprocess(rgb, x)
 
         if self._split_name == 'train':
             rgb = torch.from_numpy(np.ascontiguousarray(rgb)).float()
-            gt = torch.from_numpy(np.ascontiguousarray(gt)).long()
+            gt = torch.from_numpy(np.ascontiguousarray(gt)).float()
+            gt = (gt - self.gt_mean) / self.gt_std
             x = torch.from_numpy(np.ascontiguousarray(x)).float()
         else:
             rgb = torch.from_numpy(np.ascontiguousarray(rgb)).float()
-            gt = torch.from_numpy(np.ascontiguousarray(gt)).long()
+            gt = torch.from_numpy(np.ascontiguousarray(gt)).float()
             x = torch.from_numpy(np.ascontiguousarray(x)).float()
 
         output_dict = dict(data=rgb, label=gt, modal_x=x, fn=str(item_name), n=len(self._file_names))
@@ -105,6 +117,11 @@ class RGBXDataset(data.Dataset):
     @staticmethod
     def _open_image(filepath, mode=cv2.IMREAD_COLOR, dtype=None):
         img = np.array(cv2.imread(filepath, mode), dtype=dtype)
+        return img
+
+    @staticmethod
+    def _resize_image(img, dsize=(720, 405)):
+        img = cv2.resize(img, dsize)
         return img
 
     @staticmethod

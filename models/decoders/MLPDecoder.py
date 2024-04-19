@@ -53,8 +53,13 @@ class DecoderHead(nn.Module):
                             norm_layer(embedding_dim),
                             nn.ReLU(inplace=True)
                             )
-                            
+
         self.linear_pred = nn.Conv2d(embedding_dim, self.num_classes, kernel_size=1)
+        # self.pool = nn.AdaptiveMaxPool2d(1)
+        self.pool = nn.AdaptiveAvgPool2d((1, 1))
+        # self.fc = nn.Linear(embedding_dim, self.num_classes)
+        # self.pool = nn.AdaptiveAvgPool2d(1)
+        # self.fc = nn.Linear()
        
     def forward(self, inputs):
         # len=4, 1/4,1/8,1/16,1/32
@@ -77,6 +82,9 @@ class DecoderHead(nn.Module):
         _c = self.linear_fuse(torch.cat([_c4, _c3, _c2, _c1], dim=1))
         x = self.dropout(_c)
         x = self.linear_pred(x)
+        x = self.pool(x)
+        x = x.squeeze(dim=2).squeeze(dim=2)
+        # x = self.fc(x)
 
         return x
 

@@ -26,7 +26,7 @@ from utils.metric import hist_info, compute_score
 from tensorboardX import SummaryWriter
 import random
 import numpy as np
-from val_mm import evaluate, evaluate_msf
+from val_mm import evaluate, evaluate_msf, evaluate_parta
 
 # from eval import evaluate_mid
 
@@ -49,7 +49,7 @@ parser.add_argument("--checkpoint_dir")
 with Engine(custom_parser=parser) as engine:
     args = parser.parse_args()
     exec("from " + args.config + " import C as config")
-    logger = get_logger(config.log_dir, config.log_file, rank=engine.local_rank)
+    logger = get_logger(config.log_dir, config.log_file, rank=args.local_rank)
 
     cudnn.benchmark = True
 
@@ -58,7 +58,7 @@ with Engine(custom_parser=parser) as engine:
     val_loader, val_sampler = get_val_loader(
         engine, RGBXDataset, config, int(args.gpus)
     )
-    logger.info(f"val dataset len:{len(val_loader)*int(args.gpus)}")
+    logger.info(f"val dataset len:{len(val_loader) * int(args.gpus)}")
 
     if (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed):
         tb_dir = config.tb_dir + "/{}".format(
@@ -70,7 +70,8 @@ with Engine(custom_parser=parser) as engine:
         pp = pprint.PrettyPrinter(indent=4)
         logger.info("config: \n" + pp.pformat(config))
 
-    criterion = nn.CrossEntropyLoss(reduction="mean", ignore_index=config.background)
+    # criterion = nn.CrossEntropyLoss(reduction="mean", ignore_index=config.background)
+    criterion = nn.MSELoss(reduction="mean", )
 
     if engine.distributed:
         BatchNorm2d = nn.SyncBatchNorm
@@ -167,7 +168,9 @@ with Engine(custom_parser=parser) as engine:
     #                                 config.eval_scale_array, config.eval_flip,
     #                                 all_dev, config,args.verbose, args.save_path,args.show_image)
 
-    miou, best_miou = 0.0, 0.0
+    # miou, best_miou = 0.0, 0.0
+    best_val_loss = float('inf')
+    best_val_mrsre = float('inf')
     for epoch in range(engine.state.epoch, config.nepochs + 1):
         model.train()
         if engine.distributed:
@@ -211,33 +214,33 @@ with Engine(custom_parser=parser) as engine:
             if engine.distributed:
                 sum_loss += reduce_loss.item()
                 print_str = (
-                    "Epoch {}/{}".format(epoch, config.nepochs)
-                    + " Iter {}/{}:".format(idx + 1, config.niters_per_epoch)
-                    + " lr=%.4e" % lr
-                    + " loss=%.4f total_loss=%.4f"
-                    % (reduce_loss.item(), (sum_loss / (idx + 1)))
+                        "Epoch {}/{}".format(epoch, config.nepochs)
+                        + " Iter {}/{}:".format(idx + 1, config.niters_per_epoch)
+                        + " lr=%.4e" % lr
+                        + " loss=%.4f total_loss=%.4f"
+                        % (reduce_loss.item(), (sum_loss / (idx + 1)))
                 )
 
             else:
                 sum_loss += loss
                 print_str = (
-                    "Epoch {}/{}".format(epoch, config.nepochs)
-                    + " Iter {}/{}:".format(idx + 1, config.niters_per_epoch)
-                    + " lr=%.4e" % lr
-                    + " loss=%.4f total_loss=%.4f" % (loss, (sum_loss / (idx + 1)))
+                        "Epoch {}/{}".format(epoch, config.nepochs)
+                        + " Iter {}/{}:".format(idx + 1, config.niters_per_epoch)
+                        + " lr=%.4e" % lr
+                        + " loss=%.4f total_loss=%.4f" % (loss, (sum_loss / (idx + 1)))
                 )
 
             del loss
             pbar.set_description(print_str, refresh=False)
 
         if (engine.distributed and (engine.local_rank == 0)) or (
-            not engine.distributed
+                not engine.distributed
         ):
             tb.add_scalar("train_loss", sum_loss / len(pbar), epoch)
         logger.info(print_str)
 
         if (
-            epoch % 1 == 0 and epoch > int(config.checkpoint_start_epoch)
+                epoch % 25 == 0 and epoch > int(config.checkpoint_start_epoch)
         ) or epoch == 1:
             torch.cuda.empty_cache()
             if engine.distributed:
@@ -274,31 +277,56 @@ with Engine(custom_parser=parser) as engine:
                 with torch.no_grad():
                     model.eval()
                     device = torch.device("cuda")
-                    metric = evaluate_msf(
+                    val_loss, val_mrsre = evaluate_parta(
                         model,
                         val_loader,
                         config,
                         device,
-                        [0.5, 0.75, 1.0, 1.25, 1.5],
-                        True,
+                        [1.0],
+                        False,
                         engine,
                     )
-                    ious, miou = metric.compute_iou()
-                    acc, macc = metric.compute_pixel_acc()
-                    f1, mf1 = metric.compute_f1()
+                    # metric = evaluate_msf(
+                    #     model,
+                    #     val_loader,
+                    #     config,
+                    #     device,
+                    #     [0.5, 0.75, 1.0, 1.25, 1.5],
+                    #     True,
+                    #     engine,
+                    # )
+                    # ious, miou = metric.compute_iou()
+                    # acc, macc = metric.compute_pixel_acc()
+                    # f1, mf1 = metric.compute_f1()
                     # print('miou',miou)
                 # print('acc, macc, f1, mf1, ious, miou',acc, macc, f1, mf1, ious, miou)
                 # print('miou',miou)
-                if miou > best_miou:
-                    best_miou = miou
+                # if miou > best_miou:
+                #     best_miou = miou
+                #     engine.save_and_link_checkpoint(
+                #         config.log_dir,
+                #         config.log_dir,
+                #         config.log_dir_link,
+                #         infor="_miou_" + str(miou),
+                #         metric=miou,
+                #     )
+                # print("miou", miou, "best", best_miou)
+
+                if val_mrsre < best_val_mrsre:
+                    best_val_mrsre = val_mrsre
                     engine.save_and_link_checkpoint(
                         config.log_dir,
                         config.log_dir,
                         config.log_dir_link,
-                        infor="_miou_" + str(miou),
-                        metric=miou,
+                        infor="val_mrsre" + str(val_mrsre),
+                        metric=val_mrsre,
                     )
-                print("miou", miou, "best", best_miou)
+
+                print("val_loss: ", val_loss)
+                print("val_mrsre: ", val_mrsre)
+            # logger.info(
+            #     f"Epoch {epoch} validation result: mIoU {miou}, best mIoU {best_miou}"
+            # )
             logger.info(
-                f"Epoch {epoch} validation result: mIoU {miou}, best mIoU {best_miou}"
+                f"Epoch {epoch} validation result: val_loss {val_loss}, best val_loss {best_val_loss}, val_mrsre {val_mrsre}, best val_mrsre {best_val_mrsre}"
             )
