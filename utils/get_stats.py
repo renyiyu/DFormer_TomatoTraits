@@ -26,5 +26,5 @@ def getStat(train_data):
 
 
 if __name__ == '__main__':
-    train_dataset = ImageFolder(root='datasets/tomato_train', transform=transforms.ToTensor())
+    train_dataset = ImageFolder(root='../datasets/tomato_train', transform=transforms.ToTensor())
     print(getStat(train_dataset))

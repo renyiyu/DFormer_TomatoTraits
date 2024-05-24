@@ -121,10 +121,10 @@ class EncoderDecoder(nn.Module):
             logger.info('Using Decoder: DeepLabV3+')
             from .decoders.deeplabv3plus import DeepLabV3Plus as Head
             self.decode_head = Head(in_channels=self.channels, num_classes=cfg.num_classes, norm_layer=norm_layer)
-            from .decoders.fcnhead import FCNHead
-            self.aux_index = 2
-            self.aux_rate = 0.4
-            self.aux_head = FCNHead(self.channels[2], cfg.num_classes, norm_layer=norm_layer)
+            # from .decoders.fcnhead import FCNHead
+            # self.aux_index = 2
+            # self.aux_rate = 0.4
+            # self.aux_head = FCNHead(self.channels[2], cfg.num_classes, norm_layer=norm_layer)
         elif cfg.decoder == 'nl':
             logger.info('Using Decoder: nl+')
             from .decoders.nl_head import NLHead as Head
@@ -145,7 +145,7 @@ class EncoderDecoder(nn.Module):
     
     def init_weights(self, cfg, pretrained=None):
         if pretrained:
-            logger.info('Loading pretrained model: {}'.format(pretrained))
+            logger.info('Loading Pretrained model: {}'.format(pretrained))
             self.backbone.init_weights(pretrained=pretrained)
         logger.info('Initing weights ...')
         init_weight(self.decode_head, nn.init.kaiming_normal_,

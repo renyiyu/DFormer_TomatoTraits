@@ -80,8 +80,9 @@ class DecoderHead(nn.Module):
         _c1 = self.linear_c1(c1).permute(0,2,1).reshape(n, -1, c1.shape[2], c1.shape[3])
 
         _c = self.linear_fuse(torch.cat([_c4, _c3, _c2, _c1], dim=1))
-        x = self.dropout(_c)
-        x = self.linear_pred(x)
+        # x = self.dropout(_c)
+        # x = self.linear_pred(x)
+        x = self.linear_pred(_c)
         x = self.pool(x)
         x = x.squeeze(dim=2).squeeze(dim=2)
         # x = self.fc(x)

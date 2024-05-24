@@ -38,7 +38,7 @@ def tomato_train_preprocess(rgb, x):
             x = cv2.rotate(x, 2)
 
     if random.random() >= 0.5:
-        trans = A.RandomBrightnessContrast()
+        trans = A.RandomBrightnessContrast(brightness_limit=(-0.1, 0.1), contrast_limit=(-0.1, 0.1))
         rgb = trans(image=rgb)['image']
 
     return rgb, x

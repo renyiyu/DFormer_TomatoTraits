@@ -31,7 +31,9 @@ class RGBXDataset(data.Dataset):
         with open(self._gt_path) as json_file:
             self.gt_label_file = json.load(json_file)
 
-        gt_values = torch.tensor([[v for k, v in traits.items() if not np.isnan(v)] for name, traits in self.gt_label_file.items()])
+        # use all 4 traits as targets
+        gt_values = torch.tensor([[v for k, v in traits.items()]
+                                  for name, traits in self.gt_label_file.items()])
         self.gt_mean = torch.mean(gt_values, dim=0)
         self.gt_std = torch.std(gt_values, dim=0)
 
@@ -46,19 +48,14 @@ class RGBXDataset(data.Dataset):
         else:
             item_name = self._file_names[index]
 
-        # item_name=item_name.split('/')[1].split(self._rgb_format)[0]
         gt = self.gt_label_file[item_name]
+        # use all 4 traits
         gt = np.array([v for k, v in gt.items()])
 
         rgb_path = os.path.join(self._rgb_path, item_name.replace('.jpg','').replace('.png','') + self._rgb_format)
         x_path = os.path.join(self._x_path, item_name.replace('.jpg','').replace('.png','')  + self._x_format)
-        # gt_path = os.path.join(self._gt_path, item_name.replace('.jpg','').replace('.png','')  + self._gt_format)
 
         rgb = self._open_image(rgb_path, cv2.COLOR_BGR2RGB)
-        # rgb = self._resize_image(rgb)
-        # gt = self._open_image(gt_path, cv2.IMREAD_GRAYSCALE, dtype=np.uint8)
-        # if self._transform_gt:
-        #     gt = self._gt_transform(gt)
 
         if self._x_single_channel:
             x = self._open_image(x_path, cv2.IMREAD_GRAYSCALE)

@@ -98,6 +98,8 @@ def calculate_error(pred_dict, gt_dict):
             if name in gt_dict.keys():
                 pred = pred_dict[name][trait]
                 gt = gt_dict[name][trait]
+                if name == "number_of_red_fruits" and pred < 0:
+                    pred = 0
                 re = (pred - gt) / (gt + 1)
                 diff.append(math.pow(re, 2))
         error += np.sqrt(np.nanmean(diff))
@@ -110,36 +112,47 @@ if __name__ == '__main__':
     logger = get_logger()
     with Engine(custom_parser=parser) as engine:
         args = parser.parse_args()
-        args.config = 'local_configs.TomatoPartA.DFormer_Tiny'
+        # args.config = 'local_configs.TomatoPartA.DFormer_Tiny'
+        args.config = 'local_configs.TomatoPartA.DFormer_Small'
         exec("from " + args.config + " import config")
         if "x_modal" not in config:
             config["x_modal"] = "d"
 
-        weight_path = 'checkpoints/epoch-500val_mrsre0.24596324456589563.pth'
+        weight_path = 'checkpoints/dformer_small_final.pth'
         model = load_model(config, weight_path=weight_path)
 
-        rgb_dir = 'datasets/parta_valA_preprocess/RGB'
-        x_dir = 'datasets/parta_valA_preprocess/Depth'
-        gt_train_label_filepath = 'datasets/parta_valA_preprocess/gt.json'
-        img_paths = glob.glob(os.path.join(rgb_dir, '*.jpg'))
-        pred_dict = {}
-        for img_path in img_paths:
-            basename = os.path.basename(img_path).split('.')[0]
-            print(basename)
-            pred_dict[basename] = {}
-            pred = infer(basename, model, gt_train_label_filepath, rgb_dir, x_dir, config)
-            pred_dict[basename]['height'] = pred[0]
-            pred_dict[basename]['fw_plant'] = pred[1]
-            pred_dict[basename]['leaf_area'] = pred[2]
-            pred_dict[basename]['number_of_red_fruits'] = pred[3]
+        rgb_dir = 'datasets/val3_test/RGB'
+        x_dir = 'datasets/val3_test/Depth'
+        pred_path = 'datasets/val3_test/pred1.json'
+        train_label_filepath = 'datasets/val3_test/label.json'
 
-        # ground truth
-        with open(gt_train_label_filepath) as json_file:
-            gt_dict = json.load(json_file)
+        # read existing json
+        with open(pred_path, 'w') as f:
+            pred_dict = {}
+            img_paths = glob.glob(os.path.join(rgb_dir, '*.jpg'))
+            for img_path in img_paths:
+                basename = os.path.basename(img_path).split('.')[0]
+                print(basename)
+                pred_dict[basename] = {}
+                pred = infer(basename, model, train_label_filepath, rgb_dir, x_dir, config)
+                pred_dict[basename]['height'] = pred[0]
+                pred_dict[basename]['fw_plant'] = pred[1]
+                pred_dict[basename]['leaf_area'] = pred[2]
+                if pred[3] < 0:
+                    pred_dict[basename]['number_of_red_fruits'] = 0
+                else:
+                    pred_dict[basename]['number_of_red_fruits'] = pred[3]
+            json.dump(pred_dict, f)
 
-        # diff
-        error = calculate_error(pred_dict, gt_dict)
-        print("RMSRE: ", error)
+        # gt_label_filepath = 'datasets/val3_test/gt.json'
+        # with open(gt_label_filepath) as json_file:
+        #     gt_dict = json.load(json_file)
+        # error = calculate_error(pred_dict, gt_dict)
+        # print("RMSRE: ", error)
+
+
+
+
 
 
 

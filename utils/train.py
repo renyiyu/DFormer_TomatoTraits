@@ -72,6 +72,7 @@ with Engine(custom_parser=parser) as engine:
 
     # criterion = nn.CrossEntropyLoss(reduction="mean", ignore_index=config.background)
     criterion = nn.MSELoss(reduction="mean", )
+    # criterion = nn.L1Loss(reduction="mean", )
 
     if engine.distributed:
         BatchNorm2d = nn.SyncBatchNorm
@@ -171,6 +172,7 @@ with Engine(custom_parser=parser) as engine:
     # miou, best_miou = 0.0, 0.0
     best_val_loss = float('inf')
     best_val_mrsre = float('inf')
+    best_sum_loss = float('inf')
     for epoch in range(engine.state.epoch, config.nepochs + 1):
         model.train()
         if engine.distributed:
@@ -312,21 +314,36 @@ with Engine(custom_parser=parser) as engine:
                 #     )
                 # print("miou", miou, "best", best_miou)
 
-                if val_mrsre < best_val_mrsre:
-                    best_val_mrsre = val_mrsre
+                # if val_mrsre < best_val_mrsre:
+                #     best_val_mrsre = val_mrsre
+                #     engine.save_and_link_checkpoint(
+                #         config.log_dir,
+                #         config.log_dir,
+                #         config.log_dir_link,
+                #         infor="val_mrsre" + str(val_mrsre),
+                #         metric=val_mrsre,
+                #     )
+
+                if sum_loss < best_sum_loss:
+                    best_sum_loss = sum_loss
                     engine.save_and_link_checkpoint(
                         config.log_dir,
                         config.log_dir,
                         config.log_dir_link,
-                        infor="val_mrsre" + str(val_mrsre),
-                        metric=val_mrsre,
+                        infor="sum_loss" + str(sum_loss.item()),
+                        metric=sum_loss.item(),
                     )
 
+                print("sum_loss: ", sum_loss.item())
+                print("best_sum_loss: ", best_sum_loss.item())
                 print("val_loss: ", val_loss)
                 print("val_mrsre: ", val_mrsre)
             # logger.info(
             #     f"Epoch {epoch} validation result: mIoU {miou}, best mIoU {best_miou}"
             # )
+            # logger.info(
+            #     f"Epoch {epoch} validation result: val_loss {val_loss}, best val_loss {best_val_loss}, val_mrsre {val_mrsre}, best val_mrsre {best_val_mrsre}"
+            # )
             logger.info(
-                f"Epoch {epoch} validation result: val_loss {val_loss}, best val_loss {best_val_loss}, val_mrsre {val_mrsre}, best val_mrsre {best_val_mrsre}"
+                f"Epoch {epoch} validation result: sum_loss {sum_loss}, best_sum_loss {best_sum_loss}, val_loss {val_loss}, val_mrsre {val_mrsre}"
             )

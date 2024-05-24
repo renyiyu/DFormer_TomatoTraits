@@ -22,8 +22,9 @@ class DeepLabV3Plus(nn.Module):
                         #nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
                         #norm_layer(256),
                         #nn.ReLU(inplace=True),
-                        nn.Dropout(0.1),
+                        # nn.Dropout(0.1),
                         nn.Conv2d(256, num_classes, 1))
+        self.pool = nn.AdaptiveAvgPool2d(1)
 
     def forward(self, inputs):
         c1, _, _, c4 = inputs
@@ -31,6 +32,8 @@ class DeepLabV3Plus(nn.Module):
         c4 = self.aspp(c4)
         c4 = F.interpolate(c4, c1.size()[2:], mode='bilinear', align_corners=True)
         output = self.block(torch.cat([c4, c1], dim=1))
+        output = self.pool(output)
+        output = output.squeeze(dim=2).squeeze(dim=2)
         return output
 
 
@@ -84,7 +87,7 @@ class ASPP(nn.Module):
             nn.Conv2d(5 * out_channels, out_channels, 1, bias=False),
             norm_layer(out_channels),
             nn.ReLU(True),
-            nn.Dropout(0.5)
+            # nn.Dropout(0.5)
         )
 
     def forward(self, x):
